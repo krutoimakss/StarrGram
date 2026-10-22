@@ -1,51 +1,33 @@
 name: Build Starrgram
-
 on: workflow_dispatch
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/checkout@v4
         with:
           repository: DrKLO/Telegram
           ref: 68c6775ac373f4bdb30ae9986282dd5ec0407756
           path: tg
-
-      - name: Apply patch
-        working-directory: tg
-        run: git apply --whitespace=nowarn ../starrgram.patch
-
-      - name: Insert api keys
-        working-directory: tg
-        env:
-          TG_API_ID: ${{ secrets.TG_API_ID }}
-          TG_API_HASH: ${{ secrets.TG_API_HASH }}
-        run: |
-          F=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
-          sed -i "s|public static int APP_ID = .*;|public static int APP_ID = ${TG_API_ID};|" "$F"
-          sed -i "s|public static String APP_HASH = .*;|public static String APP_HASH = \"${TG_API_HASH}\";|" "$F"
-          grep -q "APP_ID = ${TG_API_ID};" "$F"
-
-      - name: arm64 only
-        working-directory: tg
-        run: sed -i 's|abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"|abiFilters "arm64-v8a"|' TMessagesProj_AppStandalone/build.gradle
-
-      - run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
-
-      - name: Android SDK
+          java-version: 17
+      - name: Build
+        working-directory: tg
+        env:
+          ID: ${{ secrets.TG_API_ID }}
+          HASH: ${{ secrets.TG_API_HASH }}
         run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
-
-      - name: Build APK
-        working-dir
+          git apply ../starrgram.patch
+          B=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          sed -i "s|int APP_ID = .*;|int APP_ID = $ID;|" $B
+          sed -i "s|String APP_HASH = .*;|String APP_HASH = \"$HASH\";|" $B
+          sed -i 's|abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"|abiFilters "arm64-v8a"|' TMessagesProj_AppStandalone/build.gradle
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null || true
+          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Starrgram-apk
+          path: tg/TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
