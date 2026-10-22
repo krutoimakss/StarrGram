@@ -4,6 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       all_abis:
+        ...
+
+jobs:
+name: Build Starrgram
+
+on:
+  workflow_dispatch:
+    inputs:
+      all_abis:
         description: "Собрать для всех процессоров (дольше). Обычно хватает arm64 (почти все телефоны)."
         type: boolean
         default: false
